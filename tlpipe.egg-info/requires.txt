@@ -1,0 +1,15 @@
+numpy
+scipy
+matplotlib
+h5py
+healpy
+pyephem
+aipy
+caput
+cora
+
+[cython]
+cython
+
+[mpi]
+mpi4py>=1.3

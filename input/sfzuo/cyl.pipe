@@ -1,0 +1,229 @@
+# -*- mode: python; -*-
+
+# input file for pipeline manager
+# execute this pipeline by either command of the following two:
+# tlpipe dir/to/cyl.pipe
+# mpiexec -n N tlpipe dir/to/cyl.pipe
+
+
+pipe_tasks = []
+pipe_outdir = './output/'
+pipe_logging = 'notset'
+# pipe_logging = 'info'
+pipe_timing = True
+pipe_flush = True
+
+
+import glob
+data_dir1 = '/node3_disk/disk1/20160927201537_122hrhdf5_part1'
+data_dir2 = '/node3_disk/disk2/20160927201537_122hrhdf5_part2'
+data_dir3 = '/node3_disk/disk3/20160927201537_122hrhdf5_part3'
+data_dir4 = '/node3_disk/disk4/20160927201537_122hrhdf5_part4'
+data_dir5 = '/node3_disk/disk5/20160927201537_122hrhdf5_part5'
+files1 = sorted(glob.glob(data_dir1+'/*.hdf5'))
+files2 = sorted(glob.glob(data_dir2+'/*.hdf5'))
+files3 = sorted(glob.glob(data_dir3+'/*.hdf5'))
+files4 = sorted(glob.glob(data_dir4+'/*.hdf5'))
+files5 = sorted(glob.glob(data_dir5+'/*.hdf5'))
+files = files2
+
+
+from tlpipe.timestream import dispatch
+pipe_tasks.append(dispatch.Dispatch)
+### parameters for Dispatch
+dp_input_files = files
+dp_freq_select = (483, 583)
+# dp_feed_select = [1, 16, 31, 32, 49, 63, 64, 80, 96]
+# dp_feed_select = [11, 12, 18, 42, 43, 44, 45, 74, 75, 76, 78]
+# dp_extra_inttime = 0
+dp_exclude_bad = False
+# dp_iterable = True
+dp_iter_num = 1
+dp_tag_input_iter = False
+dp_out = 'dp'
+
+from tlpipe.timestream import detect_ns
+pipe_tasks.append(detect_ns.Detect)
+### parameters for Detect
+dt_in = dp_out
+# dt_feed = 1
+# dt_iterable = True
+dt_mask_near = 0
+# dt_mask_near = 1
+dt_out = 'dt'
+
+from tlpipe.timestream import rfi_flagging
+pipe_tasks.append(rfi_flagging.Flag)
+### parameters for Flag
+rf_in = dt_out
+# rf_iterable = True
+rf_show_progress = True
+rf_process_timing = True
+rf_first_threshold = 6.0
+rf_tk_size = 1.0
+rf_fk_size = 3.0
+rf_out = 'rf'
+
+from tlpipe.timestream import subdata
+pipe_tasks.append(subdata.Subdata)
+### parameters for Subdata
+sd_in = rf_out
+sd_freq_select = (40, 60)
+# sd_iterable = True
+sd_out = 'sd'
+
+from tlpipe.timestream import bad_detect
+pipe_tasks.append(bad_detect.Detect)
+### parameters for Detect
+bd_in = sd_out
+# bd_iterable = True
+bd_out = 'bd'
+
+from tlpipe.timestream import ns_cal
+pipe_tasks.append(ns_cal.NsCal)
+### parameters for NsCal
+nc_in = bd_out
+# nc_iterable = True
+nc_show_progress = True
+nc_process_timing = True
+nc_phs_only = True
+nc_plot_gain = False
+nc_save_gain = True
+# nc_feed_no = True
+nc_out = 'nc'
+
+from tlpipe.timestream import bad_detect
+pipe_tasks.append((bad_detect.Detect, 'bd1_'))
+### parameters for Detect
+bd1_in = nc_out
+# bd1_iterable = True
+bd1_out = 'bd1'
+
+from tlpipe.timestream import rt2ts
+pipe_tasks.append(rt2ts.Rt2ts)
+### parameters for Rt2ts
+r2t_in = bd1_out
+# r2t_iterable = True
+r2t_out = 'r2t'
+
+from tlpipe.timestream import ps_cal
+pipe_tasks.append((ps_cal.PsCal, 'pc1_'))
+### parameters for PsCal
+pc1_in = r2t_out
+# pc1_iterable = True
+pc1_show_progress = True
+pc1_process_timing = True
+pc1_calibrator = 'cas'
+pc1_span = 1200
+pc1_plot_figs = False
+pc1_save_src_vis = True
+pc1_src_vis_file = 'src_vis/%s_vis.hdf5' % pc1_calibrator
+pc1_subtract_src = True
+pc1_apply_gain = False
+pc1_save_gain = True
+pc1_gain_file = 'gain/%s_gain.hdf5' % pc1_calibrator
+pc1_temperature_convert = False
+pc1_out = 'pc1'
+
+from tlpipe.timestream import ps_cal
+pipe_tasks.append((ps_cal.PsCal, 'pc2_'))
+### parameters for PsCal
+pc2_in = pc1_out
+# pc2_iterable = True
+pc2_show_progress = True
+pc2_process_timing = True
+pc2_calibrator = 'crab'
+pc2_span = 1200
+pc2_plot_figs = False
+pc2_save_src_vis = True
+pc2_src_vis_file = 'src_vis/%s_vis.hdf5' % pc2_calibrator
+pc2_subtract_src = True
+pc2_apply_gain = False
+pc2_save_gain = True
+pc2_gain_file = 'gain/%s_gain.hdf5' % pc2_calibrator
+pc2_temperature_convert = False
+pc2_out = 'pc2'
+
+from tlpipe.timestream import ps_cal
+pipe_tasks.append((ps_cal.PsCal, 'pc3_'))
+### parameters for PsCal
+pc3_in = pc2_out
+# pc3_iterable = True
+pc3_show_progress = True
+pc3_process_timing = True
+pc3_calibrator = 'cyg'
+pc3_span = 1200
+pc3_plot_figs = False
+pc3_save_src_vis = True
+pc3_src_vis_file = 'src_vis/%s_vis.hdf5' % pc3_calibrator
+pc3_subtract_src = True
+pc3_apply_gain = True
+pc3_save_gain = True
+pc3_gain_file = 'gain/%s_gain.hdf5' % pc3_calibrator
+pc3_temperature_convert = True
+pc3_out = 'pc3'
+
+from tlpipe.timestream import bad_detect
+pipe_tasks.append((bad_detect.Detect, 'bd2_'))
+### parameters for Detect
+bd2_in = pc3_out
+# bd2_iterable = True
+bd2_output_files = [ 'ps_cal/file_%d.hdf5' %i for i in range(1, 7) ]
+bd2_out = 'bd2'
+
+from tlpipe.plot import plot_waterfall
+# pipe_tasks.append(plot_waterfall.Plot)
+### parameters for Plot
+pwf_in = bd2_out
+# pwf_iterable = True
+pwf_flag_mask = True
+pwf_flag_ns = True
+pwf_fig_name = 'vis_pc/vis'
+pwf_out = 'pwf'
+
+from tlpipe.timestream import re_order
+pipe_tasks.append(re_order.ReOrder)
+### parameters for ReOrder
+ro_in = bd2_out
+# ro_iterable = True
+ro_out = 'ro'
+
+from tlpipe.timestream import accumulate
+pipe_tasks.append(accumulate.Accum)
+### parameters for Accum
+ac_in = ro_out
+# ac_iterable = True
+ac_check = False
+# ac_cache_to_file = True
+ac_out = 'ac'
+
+from tlpipe.timestream import barrier
+pipe_tasks.append(barrier.Barrier)
+### parameters for Barrier
+
+from tlpipe.timestream import average
+pipe_tasks.append(average.Average)
+### parameters for Average
+av_in = ac_out
+av_keep_last_in = True
+av_output_files = [ 'average/file_%d.hdf5' %i for i in range(1, 7) ]
+av_out = 'av'
+
+from tlpipe.timestream import map_making
+pipe_tasks.append(map_making.MapMaking)
+### parameters for MapMaking
+mm_in = av_out
+mm_input_files = av_output_files
+# mm_feed_select = list(set(range(1, 97)) - set([28, 50, 72, 79]))
+mm_mask_daytime = False
+# mm_mask_time_range = [6.5, 24.0]
+# mm_bl_range = [14.0, 1.0e7] # use long baselines only
+mm_auto_correlations = False
+mm_pol = 'xx'
+mm_noise_weight = False
+# mm_noise_weight = True
+# mm_dirty_map = True
+mm_dirty_map = False
+mm_method = 'tk'
+mm_epsilon = 0.01
+mm_out = 'mm'

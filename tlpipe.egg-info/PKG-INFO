@@ -1,0 +1,12 @@
+Metadata-Version: 2.1
+Name: tlpipe
+Version: 0.1
+Summary: Tianlai data pipeline
+Home-page: https://github.com/TianlaiProject/tlpipe
+Author: Shifan Zuo
+Author-email: sfzuo@bao.ac.cn
+License: GPL v3.0
+Description: UNKNOWN
+Platform: UNKNOWN
+Provides-Extra: cython
+Provides-Extra: mpi

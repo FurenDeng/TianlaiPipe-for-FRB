@@ -31,6 +31,7 @@ from datetime import datetime
 from tlpipe.cal import calibrators
 import warnings
 from ns_cal import uni_gain
+import os
 
 class NoTransit(Exception):
     pass
@@ -719,12 +720,10 @@ class PsCal(timestream_task.TimestreamTask):
                                 
                             if save_phs_change:
                                 f.create_dataset('phs', data=phs)
-                            with h5py.File(output_path(ts.ns_gain_file), 'r+') as ns_file:
-                                phs_only = not ('ns_cal_amp' in ns_file.keys())
-                                exclude_bad = 'badchn' in ns_file['channo'].attrs.keys()
-                                if 'uni_gain' in ns_file.keys():
-                                    pass
-                                else:
+                            if os.path.exists(output_path(ts.ns_gain_file)):
+                                with h5py.File(output_path(ts.ns_gain_file), 'r+') as ns_file:
+                                    phs_only = not ('ns_cal_amp' in ns_file.keys())
+                                    exclude_bad = 'badchn' in ns_file['channo'].attrs.keys()
                                     new_gain = uni_gain(f, ns_file, exclude_bad = exclude_bad, phs_only = phs_only)
                                     ns_file.create_dataset('uni_gain', data = new_gain)
                                     ns_file['uni_gain'].attrs['dim'] = '(time, freq, bl)'

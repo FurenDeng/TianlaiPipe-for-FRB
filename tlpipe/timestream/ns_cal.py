@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib.ticker import MaxNLocator, AutoMinorLocator
 
-class NotEnoughPointToInterpolate(Warning):
+class NotEnoughPointToInterpolateWarning(Warning):
     pass
 
 # still need to test for exclude_bad = False case
@@ -142,6 +142,7 @@ class NsCal(timestream_task.TimestreamTask):
         rt.redistribute('baseline')
 
 #===================================
+        rt.gain_file = self.params['gain_file']
         absolute_gain_filename = self.params['absolute_gain_filename']
         use_center_data = self.params['use_center_data']
         if use_center_data and rt['ns_on'].attrs['period'] <= 2:
@@ -209,7 +210,7 @@ class NsCal(timestream_task.TimestreamTask):
         if save_gain:
             interp_mask_ratio = mpiutil.allreduce(np.sum(rt.interp_mask_count))/1./mpiutil.allreduce(np.size(rt.interp_mask_count)) * 100.
             if interp_mask_ratio > 50.:
-                warnings.warn('%.1f%% of the data was masked due to shortage of noise points for interpolation(need at least 4 to perform cubic spline)! The pointsource calibration may not be done due to too many masked points!'%interp_mask_ratio, NotEnoughPointToInterpolate)
+                warnings.warn('%.1f%% of the data was masked due to shortage of noise points for interpolation(need at least 4 to perform cubic spline)! The pointsource calibration may not be done due to too many masked points!'%interp_mask_ratio, NotEnoughPointToInterpolateWarning)
             if interp_mask_ratio > 80.:
                 rt.interp_all_masked = True
             # gather bl_order to rank0
@@ -245,15 +246,16 @@ class NsCal(timestream_task.TimestreamTask):
                     if not phs_only:
                         # save ns_cal_amp
                         f.create_dataset('ns_cal_amp', data=ns_cal_amp)
-                    if not (absolute_gain_filename is None):
-                        # save channo
 
+                    # save channo
+                    f.create_dataset('channo', data=rt['channo'][:])
+                    f['channo'].attrs['dim'] = rt['channo'].attrs['dimname']
+                    if rt.exclude_bad:
+                        f['channo'].attrs['badchn'] = rt['channo'].attrs['badchn']
+
+                    if not (absolute_gain_filename is None):
                         if not os.path.exists(output_path(absolute_gain_filename)):
                             raise NoPsGainFile('No absolute gain file %s, do the ps calibration first!'%output_path(absolute_gain_filename))
-                        f.create_dataset('channo', data=rt['channo'][:])
-                        f['channo'].attrs['dim'] = rt['channo'].attrs['dimname']
-                        if rt.exclude_bad:
-                            f['channo'].attrs['badchn'] = rt['channo'].attrs['badchn']
                         with h5py.File(output_path(absolute_gain_filename,'r')) as abs_gain:
                             new_gain = uni_gain(abs_gain, f, exclude_bad = rt.exclude_bad, phs_only = phs_only)
                             # still need to be tested for exclude_bad = False case

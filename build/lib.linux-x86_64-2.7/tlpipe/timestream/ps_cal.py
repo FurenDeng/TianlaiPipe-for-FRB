@@ -30,10 +30,11 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from tlpipe.cal import calibrators
 import warnings
+from ns_cal import uni_gain
 
 class NoTransit(Exception):
     pass
-class NotEnoughPointToInterpolate(Exception):
+class NotEnoughPointToInterpolateError(Exception):
     pass
 class PsCal(timestream_task.TimestreamTask):
     """Calibration using a strong point source.
@@ -237,7 +238,7 @@ class PsCal(timestream_task.TimestreamTask):
                 print 'transit ind of %s: %s, time: %s' % (s.src_name, transit_inds, local_next_transit)
 
             if ts.interp_all_masked:
-                raise NotEnoughPointToInterpolate('More than 80% of the data was masked due to shortage of noise points for interpolation(need at least 4 to perform cubic spline)! The pointsource calibration may not be done due to too many masked points!')
+                raise NotEnoughPointToInterpolateError('More than 80% of the data was masked due to shortage of noise points for interpolation(need at least 4 to perform cubic spline)! The pointsource calibration may not be done due to too many masked points!')
             ### now only use the first transit point to do the cal
             ### may need to improve in the future
             transit_ind = transit_inds[0]
@@ -715,8 +716,18 @@ class PsCal(timestream_task.TimestreamTask):
                             dset.attrs['pol'] = np.array(['xx', 'yy'])
                             dset.attrs['feed'] = np.array(feedno)
                             # save phs
+                                
                             if save_phs_change:
                                 f.create_dataset('phs', data=phs)
+                            with h5py.File(output_path(ts.ns_gain_file), 'r+') as ns_file:
+                                phs_only = not ('ns_cal_amp' in ns_file.keys())
+                                exclude_bad = 'badchn' in ns_file['channo'].attrs.keys()
+                                if 'uni_gain' in ns_file.keys():
+                                    pass
+                                else:
+                                    new_gain = uni_gain(f, ns_file, exclude_bad = exclude_bad, phs_only = phs_only)
+                                    ns_file.create_dataset('uni_gain', data = new_gain)
+                                    ns_file['uni_gain'].attrs['dim'] = '(time, freq, bl)'
 
                     mpiutil.barrier()
 

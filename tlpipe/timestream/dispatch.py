@@ -44,6 +44,7 @@ class Dispatch(timestream_task.TimestreamTask):
                     'extra_inttime': 150, # extra int time to ensure smooth transition in the two ends
                     'exclude_bad': True, # exclude bad channels
                     'drop_days': 0.0, # drop data if time is less than this factor of days
+                    'ps_first': False, # if True, the default sequence will be ps cal -> ns cal, else will be ns cal -> ps cal
                   }
 
     prefix = 'dp_'
@@ -285,5 +286,6 @@ class Dispatch(timestream_task.TimestreamTask):
     def process(self, rt):
         """Return loaded data as a
         :class:`~tlpipe.container.raw_timestream.RawTimestream` object."""
+        rt.ps_first = self.params['ps_first']
 
         return super(Dispatch, self).process(rt)

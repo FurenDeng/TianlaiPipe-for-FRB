@@ -128,9 +128,8 @@ class Detect(timestream_task.TimestreamTask):
 
         rt.redistribute(0) # make time the dist axis
 
-#        time_span = rt.local_vis.shape[0]
-#        total_time_span = mpiutil.allreduce(time_span)
-        total_time_span = rt['sec1970'].shape[0]
+        time_span = rt.local_vis.shape[0]
+        total_time_span = mpiutil.allreduce(time_span)
 
         auto_inds = np.where(rt.bl[:, 0]==rt.bl[:, 1])[0].tolist() # inds for auto-correlations
         channels = [ rt.bl[ai, 0] for ai in auto_inds ] # all chosen channels
@@ -147,8 +146,7 @@ class Detect(timestream_task.TimestreamTask):
         auto_inds.remove(bl_ind)
         auto_inds = [bl_ind] + auto_inds
         if rt.FRB_cal:
-#            ns_arr_end_time = mpiutil.bcast(rt['jul_date'][total_time_span - 1], root = mpiutil.size - 1)
-            ns_arr_end_time = rt.attrs['sec1970'][0] + rt.attrs['inttime']*(total_time_span - 1)
+            ns_arr_end_time = mpiutil.bcast(rt['jul_date'][total_time_span - 1], root = mpiutil.size - 1)
             if os.path.exists(output_path(ns_arr_file)) and not os.path.exists(output_path(ns_prop_file)):
                 filein = np.load(output_path(ns_arr_file))
                 # add 0 to avoid a single float or int become an array
@@ -160,27 +158,24 @@ class Detect(timestream_task.TimestreamTask):
                 ns_arr_num = filein['ns_num'] + 0
                 ns_arr_bl = filein['auto_chn'] + 0
                 ns_arr_start_time = filein['start_time']
-#                overlap_index_span = np.around(np.float128(filein['end_time'] - mpiutil.bcast(rt['jul_date'][0], root = 0))*24.*3600./rt.attrs['inttime']) + 1
-                overlap_index_span = np.around(np.float128(filein['end_time'] - rt.attrs['sec1970'][0])/rt.attrs['inttime']) + 1
+                overlap_index_span = np.around(np.float128(filein['end_time'] - mpiutil.bcast(rt['jul_date'][0], root = 0))*24.*3600./rt.attrs['inttime']) + 1
                 if overlap_index_span > 0:
-                    raise OverlapData('Overlap of data occured when trying to build up noise property file! In julian date, the end time of previous data is %.10f, while the start time of this data is %.10f. The overlap span in index is %d.'%(filein['end_time'], rt.attrs['sec1970'][0], overlap_index_span))
+                    raise OverlapData('Overlap of data occured when trying to build up noise property file! In julian date, the end time of previous data is %.10f, while the start time of this data is %.10f. The overlap span in index is %d.'%(filein['end_time'], mpiutil.bcast(rt['jul_date'][0], root = 0), overlap_index_span))
             elif not os.path.exists(output_path(ns_prop_file)):
                 ns_arr_pinds = []
                 ns_arr_ninds = []
                 ns_arr_len = 0
                 ns_arr_num = -1 # to distinguish the first process
 
-#                ns_arr_start_time = mpiutil.bcast(rt['jul_date'][0], root = 0)
-                ns_arr_start_time = rt.attrs['sec1970'][0]
+                ns_arr_start_time = mpiutil.bcast(rt['jul_date'][0], root = 0)
 
         if rt.FRB_cal and os.path.exists(output_path(ns_prop_file)):
-            if mpiutil.rank0:
-                print('Use existing ns property file %s to do calibration.'%output_path(ns_prop_file))
+            print('Use existing ns property file %s to do calibration.'%output_path(ns_prop_file))
             ns_prop_data = np.load(output_path(ns_prop_file))
             period = ns_prop_data['period'] + 0
             on_time = ns_prop_data['on_time'] + 0
             off_time = ns_prop_data['off_time'] + 0
-            reference_time = ns_prop_data['reference_time'] + 0 # in sec1970, is a start point of noise
+            reference_time = ns_prop_data['reference_time'] + 0 # in julian date, is a start point of noise
             if 'lost_count' in ns_prop_data.files:
                 lost_count_before = ns_prop_data['lost_count']
             else:
@@ -190,14 +185,12 @@ class Detect(timestream_task.TimestreamTask):
             else:
                 added_count_before = 0
 
-#            this_time_start = mpiutil.bcast(rt['jul_date'][0], root=0)
-#            skip_inds = int(np.around((this_time_start - reference_time)*86400.0/rt.attrs['inttime'])) # the number of index between the reference time and the start point
-            this_time_start = rt.attrs['sec1970'][0]
-            skip_inds = int(np.around((this_time_start - reference_time)/rt.attrs['inttime'])) # the number of index between the reference time and the start point
+            this_time_start = mpiutil.bcast(rt['jul_date'][0], root=0)
+            skip_inds = int(np.around((this_time_start - reference_time)*86400.0/rt.attrs['inttime'])) # the number of index between the reference time and the start point
             on_start = period - skip_inds%period
 #            if total_time_span < period:
 #                raise Exception('Time span of data %d is shorter than period %d!'%(total_time_span, period))
-            if total_time_span <= on_start + on_time:
+            if total_time_span < on_start + on_time:
                 raise NoNoisePoint('Calculated from previous data, this data contains no noise point or does not contain complete noise signal!')
             # check whether there are lost points
             # only consider that the case that there are one lost point and only consider the on points
@@ -270,7 +263,7 @@ class Detect(timestream_task.TimestreamTask):
                     added_one_pos += [cmp_res]
                     continue
                 else:
-                    raise Exception('Unknown comparison signal!')
+                    raise Exception('Unknown compare signal!')
                     
 #                if on_start in pinds or on_start + on_time in ninds:
 #                    # to avoid the effect of interference
@@ -321,12 +314,11 @@ class Detect(timestream_task.TimestreamTask):
                     off_points = off_points[1:]
                 if mpiutil.rank0:
                     if lost_count_before >= change_reference_tol:
-#                        reference_time -= 1/86400.0*rt.attrs['inttime']
-                        reference_time -= rt.attrs['inttime']
+                        reference_time -= 1/86400.0*rt.attrs['inttime']
                         warnings.warn('Move the reference time one index earlier to compensate!',ChangeReferenceTime)
                         np.savez(output_path(ns_prop_file), period = period, on_time = on_time, off_time = off_time, reference_time = reference_time, lost_count = 0, added_count = 0)
                     else:
-                        warnings.warn('The number of recorded lost points was %d while tolerance is %d. Do not change the reference time.'%(lost_count_before, change_reference_tol))
+                        print('The number of recorded lost points was %d while tolerance is %d. Do not change the reference time.'%(lost_count_before, change_reference_tol))
                         np.savez(output_path(ns_prop_file), period = period, on_time = on_time, off_time = off_time, reference_time = reference_time, lost_count = lost_count_before, added_count = 0)
 #                mpiutil.barrier()
             elif added_one_point > 2*len(auto_inds)/3:
@@ -356,11 +348,10 @@ class Detect(timestream_task.TimestreamTask):
                 if mpiutil.rank0:
                     if added_count_before >= change_reference_tol:
                         warnings.warn('Move the reference time one index later to compensate!',ChangeReferenceTime)
-#                        reference_time += 1/86400.0*rt.attrs['inttime']
-                        reference_time += rt.attrs['inttime']
+                        reference_time += 1/86400.0*rt.attrs['inttime']
                         np.savez(output_path(ns_prop_file), period = period, on_time = on_time, off_time = off_time, reference_time = reference_time, lost_count = 0, added_count = 0)
                     else:
-                        warnings.warn('The number of recorded added points was %d while tolerance is %d. Do not change the reference time.'%(added_count_before, change_reference_tol))
+                        print('The number of recorded added points was %d while tolerance is %d. Do not change the reference time.'%(added_count_before, change_reference_tol))
                         np.savez(output_path(ns_prop_file), period = period, on_time = on_time, off_time = off_time, reference_time = reference_time, lost_count = 0, added_count = added_count_before)
 #                mpiutil.barrier()
             elif lost_one_point > 0 or abnormal_count > 0 or added_one_point > 0:
@@ -422,6 +413,11 @@ class Detect(timestream_task.TimestreamTask):
                         pinds1.append(pi)
                 pinds = np.array(pinds1)
                 pT = Counter(np.diff(pinds)).most_common(1)[0][0] # period of pinds
+                
+#            print('pT:',pT)
+#            np.save('pinds',pinds)
+#            np.save('tt_mean',tt_mean)
+#            np.save('df',df)
 
                 ndf = np.where(df<0, df, 0)
                 ninds = np.where(ndf<ndf.mean() - sigma*ndf.std())[0]
@@ -443,12 +439,21 @@ class Detect(timestream_task.TimestreamTask):
                 ninds = np.array(ninds1[::-1])
                 nT = Counter(np.diff(ninds)).most_common(1)[0][0] # period of ninds
 
+#                if min_inds == 0:
+#                    min_inds = min(len(pinds), len(ninds))
+#                else:
+#                    min_inds = min(len(pinds), len(ninds), min_inds)
                 ns_num_add += [min(len(pinds), len(ninds))]
                 if rt.FRB_cal:
                     if ns_arr_num == -1:
+#                        if mpiutil.rank0:
+#                            print(ninds)
                         ns_arr_pinds += [pinds]
                         ns_arr_ninds += [ninds]
                     else:
+#                        if mpiutil.rank0:
+#                            print(ninds)
+#                            print(ns_arr_ninds[ns_arr_index])
                         ns_arr_pinds[ns_arr_index] = np.concatenate([ns_arr_pinds[ns_arr_index], pinds + ns_arr_len])
                         ns_arr_ninds[ns_arr_index] = np.concatenate([ns_arr_ninds[ns_arr_index], ninds + ns_arr_len])
 #==============================================
@@ -500,9 +505,8 @@ class Detect(timestream_task.TimestreamTask):
 #==============================================
             if rt.FRB_cal:
                 ns_arr_len += total_time_span
-#                ns_arr_from_time = np.float128(ns_arr_end_time - ns_arr_start_time)*24.*3600./rt.attrs['inttime'] + 1
-                ns_arr_from_time = np.around(np.float128(ns_arr_end_time - ns_arr_start_time)/rt.attrs['inttime']) + 1
-                if ns_arr_len == ns_arr_from_time:
+                ns_arr_from_time = np.float128(ns_arr_end_time - ns_arr_start_time)*24.*3600./rt.attrs['inttime'] + 1
+                if np.abs(ns_arr_len - ns_arr_from_time) < 1: # avoid numeric errors, which do appeare
                     pass
                 else:
                     raise IncontinuousData('Incontinuous data. Index span calculated from time is %.2f, while the sum of array length is %d! Can not deal with incontinuous data at present!'%(ns_arr_from_time, ns_arr_len))
@@ -520,8 +524,7 @@ class Detect(timestream_task.TimestreamTask):
 #            mpiutil.barrier()
 #=================================================================
         if rt.FRB_cal and (not os.path.exists(output_path(ns_prop_file))) and ns_arr_num >= num_noise:
-            if mpiutil.rank0:
-                print('Got %d noise points (need %d) to build up noise property file!'%(ns_arr_num, num_noise))
+            print('Got %d noise points (need %d) to build up noise property file!'%(ns_arr_num, num_noise))
             for ns_arr_index, (pinds, ninds) in enumerate(zip(ns_arr_pinds, ns_arr_ninds)):
                 if len(pinds) < num_noise*2./3. or len(ninds) < num_noise*2./3.:
                     print('Channel %d does not have enough noise points(%d, need %d) for calibration. Do not use it.'%(ns_arr_bl[ns_arr_index], len(pinds), int(2*num_noise/3.)))
@@ -541,6 +544,8 @@ class Detect(timestream_task.TimestreamTask):
                 dinds = (ninds - pinds).flatten()
                 on_time = Counter(dinds[dinds>0] % period).most_common(1)[0][0]
                 off_time = Counter(-dinds[dinds<0] % period).most_common(1)[0][0]
+#            print('on_time:',on_time)
+#            print('off_time:',off_time)
 
                 if period != on_time + off_time: # incorrect detect
                     if mpiutil.rank0:
@@ -596,11 +601,9 @@ class Detect(timestream_task.TimestreamTask):
         rt['ns_on'].attrs['off_time'] = off_time
 
         if (not rt['jul_date'][on_start] is None) and not os.path.exists(output_path(ns_prop_file)):
-#            np.savez(output_path(ns_prop_file), period = period, on_time = on_time, off_time = off_time, reference_time = np.float128(rt['jul_date'][on_start]))
-            np.savez(output_path(ns_prop_file), period = period, on_time = on_time, off_time = off_time, reference_time = np.float128(rt.attrs['sec1970'][0] + on_start*rt.attrs['inttime']))
+            np.savez(output_path(ns_prop_file), period = period, on_time = on_time, off_time = off_time, reference_time = np.float128(rt['jul_date'][on_start]))
 #            mpiutil.barrier()
-            if mpiutil.rank0:
-                print('Save noise property file to %s'%output_path(ns_prop_file))
+            print('Save noise property file to %s'%output_path(ns_prop_file))
 
         # set vis_mask corresponding to ns_on
         on_inds = np.where(rt['ns_on'].local_data[:])[0]

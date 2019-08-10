@@ -55,6 +55,10 @@ class RawTimestream(timestream_common.TimestreamCommon):
     interp_mask_count = []
     interp_all_masked = False
     ns_gain_file = 'ns_cal/gain.hdf5'
+    ps_first = False
+    normal_index = None
+    normal_amp = None
+    normal_phs = None
 
     # def channel_select(self, value=(0, None), corr='all'):
     #     """Select data to be loaded from inputs files corresponding to the specified channels.
@@ -374,8 +378,11 @@ class RawTimestream(timestream_common.TimestreamCommon):
         memh5.copyattrs(self['blorder'].attrs, ts['blorder'].attrs)
         # other bl ordered dataset
         other_bl_dset = set(self.bl_ordered_datasets.keys()) - {'vis', 'vis_mask', 'blorder', 'true_blorder', 'bl_pol'}
+        # the point where new attrs to add
         ts.interp_all_masked = self.interp_all_masked
         ts.ns_gain_file = self.ns_gain_file
+        ts.ps_first = self.ps_first
+
         if len(other_bl_dset) > 0:
             raise RuntimeError('Should not have other bl_ordered_datasets %s' % other_bl_dset)
 

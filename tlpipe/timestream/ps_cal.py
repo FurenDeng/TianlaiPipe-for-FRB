@@ -157,10 +157,12 @@ class PsCal(timestream_task.TimestreamTask):
 #                srcdict = {'cas':'CassiopeiaA'}
                 src_index = 0.1
                 for src_short, src_long in srcdict.items():
+#                    print(src_short,src_long,obsd_sources,calibrator)
                     if (src_short == calibrator) and (src_long in obsd_sources):
                         src_index = obsd_sources.index(src_long)
-                    else:
-                        raise Exception('the transit source is not included in the observation plan!')
+                        break
+                else:
+                    raise Exception('the transit source is not included in the observation plan!')
                 obs_transit_time = ts['transitsource'][src_index][0]
 
 #            srclist, cutoff, catalogs = a.scripting.parse_srcs(calibrator, catalog)
@@ -205,7 +207,7 @@ class PsCal(timestream_task.TimestreamTask):
 #                    raise RuntimeError('dish data does not contain local transit time %s of source %s' % (local_next_transit, calibrator))
                     raise NoTransit('Dish data does not contain local transit time %s of source %s' % (local_next_transit, calibrator))
                 transit_inds = [ np.searchsorted(ts['jul_date'][:], transit_time) ]
-                peak_span = int(10./ts.attrs['inttime'])
+                peak_span = int(np.around(10./ts.attrs['inttime']))
                 peak_start = ts['jul_date'][transit_inds[0] - peak_span]
                 peak_end = ts['jul_date'][transit_inds[0] + peak_span]
                 tspan = (peak_end - peak_start)*86400.
@@ -238,7 +240,7 @@ class PsCal(timestream_task.TimestreamTask):
             if mpiutil.rank0:
                 print 'transit ind of %s: %s, time: %s' % (s.src_name, transit_inds, local_next_transit)
 
-            if ts.interp_all_masked:
+            if (not ts.ps_first) and ts.interp_all_masked:
                 raise NotEnoughPointToInterpolateError('More than 80% of the data was masked due to shortage of noise points for interpolation(need at least 4 to perform cubic spline)! The pointsource calibration may not be done due to too many masked points!')
             ### now only use the first transit point to do the cal
             ### may need to improve in the future
@@ -720,11 +722,18 @@ class PsCal(timestream_task.TimestreamTask):
                                 
                             if save_phs_change:
                                 f.create_dataset('phs', data=phs)
-                            if os.path.exists(output_path(ts.ns_gain_file)):
+                            # save transit index and transit time for the case do the ps cal first
+                            f.attrs['transit_index'] = transit_inds[0]
+#                            f.attrs['transit_time'] = ts['jul_date'][transit_inds[0]]
+                            f.attrs['transit_jul'] = ts['jul_date'][transit_inds[0]]
+                            f.attrs['transit_time'] = ts['sec1970'][transit_inds[0]]
+#                            f.attrs['transit_time'] = ts.attrs['sec1970'] + ts.attrs['inttime']*transit_inds[0] # in sec1970 to improve numeric precision
+
+                            if os.path.exists(output_path(ts.ns_gain_file)) and not ts.ps_first:
                                 with h5py.File(output_path(ts.ns_gain_file), 'r+') as ns_file:
                                     phs_only = not ('ns_cal_amp' in ns_file.keys())
-                                    exclude_bad = 'badchn' in ns_file['channo'].attrs.keys()
-                                    new_gain = uni_gain(f, ns_file, exclude_bad = exclude_bad, phs_only = phs_only)
+#                                    exclude_bad = 'badchn' in ns_file['channo'].attrs.keys()
+                                    new_gain = uni_gain(f, ns_file, phs_only = phs_only)
                                     ns_file.create_dataset('uni_gain', data = new_gain)
                                     ns_file['uni_gain'].attrs['dim'] = '(time, freq, bl)'
 

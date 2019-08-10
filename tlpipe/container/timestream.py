@@ -48,6 +48,7 @@ class Timestream(timestream_common.TimestreamCommon):
                               }
     interp_all_masked = False
     ns_gain_file = 'ns_cal/gain.hdf5'
+    ps_first = False
 
     @property
     def pol_ordered_datasets(self):
